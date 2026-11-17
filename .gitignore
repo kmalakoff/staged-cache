@@ -1,0 +1,17 @@
+.DS_Store
+node_modules/
+dist/
+docs/
+npm-debug.log*
+.tmp/
+.cache/
+
+# agents
+.agents/
+.archive/
+.worktrees/
+.claude/
+AGENTS.md
+CLAUDE.md
+
+.archive/
