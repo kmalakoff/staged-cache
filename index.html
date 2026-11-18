@@ -34,11 +34,16 @@
 <p>Returns <code>dest</code> (through the callback, or a Promise when no callback is passed).</p>
 <ol>
 <li>If <code>verify(dest)</code> is true, return <code>dest</code>. Nothing is built.</li>
-<li>Otherwise create <code>dest</code>'s parent folder, call <code>build(staging)</code> with a unique name beside <code>dest</code>, and <code>verify(staging)</code>.</li>
+<li>Otherwise create <code>dest</code>'s parent folder, call <code>build(staging)</code> with a unique hidden name beside <code>dest</code> (<code>.&lt;name of dest&gt;-&lt;suffix&gt;</code>), and <code>verify(staging)</code>. The name starts with a dot so that code listing the folder, and any walker that skips dot names, never sees a build in progress.</li>
 <li>Rename <code>staging</code> to <code>dest</code>. If another process won the race and <code>verify(dest)</code> is now true, that result is used.</li>
 <li>If an invalid file or folder is in the way, remove it and rename again.</li>
 <li>Always remove <code>staging</code>. A failed or unverifiable build leaves nothing behind, and the error reaches the caller.</li>
 </ol>
+<p><code>staged-cache</code> removes only the staging file or folder that the same call created. It never sweeps, expires or prunes anything else.</p>
+<ul>
+<li>Code that lists a cache folder (a version list, a prune step) must skip names that start with a dot: those are builds in progress, not entries.</li>
+<li>A process that is killed outright (<code>SIGKILL</code>, power loss) during a build leaves its hidden staging file or folder behind. It is never taken for an entry, and it stays until you delete it.</li>
+</ul>
 <p><code>verify(path, callback)</code> and <code>build(staging, callback)</code> take Node-style callbacks (<code>callback(err, valid)</code> and <code>callback(err)</code>), or return a Promise instead. <code>verify</code> answers <code>false</code> for a result that is missing or wrong, and reports an error only when it could not decide. An <code>ENOENT</code> or <code>ENOTDIR</code> error counts as <code>false</code> only when its <code>path</code> is the checked path or inside it; the same code from elsewhere (for example <code>spawn git ENOENT</code>) fails the call. A <code>verify</code> or <code>build</code> that never calls back and never returns a Promise makes the call hang.</p>
 <h3 id="_-1" class="tsd-anchor-link"><code>verifySha256(expected)</code><a href="#_-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <p>A ready-made <code>verify</code> for a file: true when the file's sha256 (hex) equals <code>expected</code>. A folder in the way is <code>false</code>. A missing file is an <code>ENOENT</code> error about that path, which <code>stagedCache</code> treats as <code>false</code>.</p>
