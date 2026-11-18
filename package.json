@@ -1,6 +1,6 @@
 {
   "name": "staged-cache",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Use a verified file or folder if it is already there, otherwise build it under a temporary name, verify it and swap it into place. Safe when several processes race.",
   "keywords": [
     "cache",
