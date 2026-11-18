@@ -1,6 +1,10 @@
 # Changelog
 
-## [0.2.0]
+## [0.2.1] - 2026-11-18
+
+Documentation only: the README examples are written in modern JavaScript (`import`, `async`/`await`), with the callback form shown once. No code change.
+
+## [0.2.0] - 2026-11-18
 
 ### Added
 
@@ -11,13 +15,13 @@
 - The staging name is now `.<name of dest>-<host>-<pid>-<suffix>`, labelled with the building process and a short tag of its process-id space (the platform and hostname, and on Linux the PID namespace and machine id). The tag does not change across a reboot. Leftovers named by 0.1.2 (`.<name of dest>-<suffix>`) are not listed by `staleStaging`.
 - The staging name is 13 to 17 characters longer than in 0.1.2, so the longest usable `dest` name is shorter by that much (about 228 characters where the limit is 255).
 
-## [0.1.2]
+## [0.1.2] - 2026-11-18
 
 ### Fixed
 
 - The staging file or folder is now hidden: `.<name of dest>-<suffix>` beside `dest`, where it used to be `<name of dest>-<suffix>`. Code that lists a cache folder (a version list, a prune step) could see a build in progress, or one left by a killed process, and take it for an entry.
 
-## [0.1.1]
+## [0.1.1] - 2026-11-18
 
 ### Fixed
 

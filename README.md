@@ -15,76 +15,76 @@ npm install staged-cache
 ### A downloaded file, checked by sha256
 
 ```js
-var path = require('path');
-var getFile = require('get-file-compat');
-var stagedCache = require('staged-cache').stagedCache;
-var verifySha256 = require('staged-cache').verifySha256;
+import { createWriteStream } from 'node:fs';
+import path from 'node:path';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { stagedCache, verifySha256 } from 'staged-cache';
 
-var dest = path.join(__dirname, '.cache', 'node-v22.12.0.tar.gz');
-var sha256 = '<the published sha256 of the file>';
+const url = 'https://nodejs.org/dist/v22.12.0/node-v22.12.0.tar.gz';
+const dest = path.join(import.meta.dirname, '.cache', 'node-v22.12.0.tar.gz');
+const sha256 = '<the published sha256 of the file>';
 
-stagedCache(
-  dest,
-  {
-    verify: verifySha256(sha256),
-    build: function (staging, callback) {
-      getFile('https://nodejs.org/dist/v22.12.0/node-v22.12.0.tar.gz', staging, function (err, res) {
-        callback(err || (res.statusCode === 200 ? null : new Error('HTTP ' + res.statusCode)));
-      });
-    },
+const file = await stagedCache(dest, {
+  verify: verifySha256(sha256),
+  build: async (staging) => {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    await pipeline(Readable.fromWeb(res.body), createWriteStream(staging));
   },
-  function (err, file) {
-    if (err) throw err;
-    console.log(file); // dest: downloaded and verified on the first run, only hashed on later runs
-  }
-);
+});
+console.log(file); // dest: downloaded and verified on the first run, only hashed on later runs
 ```
 
-`getFile` is [get-file-compat](https://www.npmjs.com/package/get-file-compat); any code that writes the file to `staging` works. On a later run the existing file is hashed, found valid and returned without a download.
+Any code that writes the file to `staging` works. On a later run the existing file is hashed, found valid and returned without a download.
 
 ### A folder built by git
 
 ```js
-var path = require('path');
-var execFile = require('child_process').execFile;
-var stagedCache = require('staged-cache').stagedCache;
+import { execFile } from 'node:child_process';
+import path from 'node:path';
+import { promisify } from 'node:util';
+import { stagedCache } from 'staged-cache';
 
-var COMMIT = '<a full commit sha>';
-var REPO = 'https://github.com/example/project.git';
-var dest = path.join(__dirname, '.cache', 'project-' + COMMIT);
+const COMMIT = '<a full commit sha>';
+const REPO = 'https://github.com/example/project.git';
+const dest = path.join(import.meta.dirname, '.cache', `project-${COMMIT}`);
 
-function git(args, cwd, callback) {
-  execFile('git', args, { cwd: cwd }, function (err, stdout) {
-    callback(err, stdout);
-  });
-}
+const run = promisify(execFile);
+const git = (args, cwd) => run('git', args, { cwd });
 
-stagedCache(
-  dest,
-  {
-    verify: function (dir, callback) {
-      git(['rev-parse', 'HEAD'], dir, function (err, stdout) {
-        callback(null, !err && stdout.trim() === COMMIT);
-      });
-    },
-    build: function (staging, callback) {
-      git(['init', staging], undefined, function (err) {
-        if (err) return callback(err);
-        git(['fetch', '--depth', '1', REPO, COMMIT], staging, function (err) {
-          if (err) return callback(err);
-          git(['checkout', '--detach', 'FETCH_HEAD'], staging, callback);
-        });
-      });
-    },
+const dir = await stagedCache(dest, {
+  verify: async (dir) => {
+    try {
+      const { stdout } = await git(['rev-parse', 'HEAD'], dir);
+      return stdout.trim() === COMMIT;
+    } catch {
+      return false;
+    }
   },
-  function (err, dir) {
-    if (err) throw err;
-    console.log(dir);
-  }
-);
+  build: async (staging) => {
+    await git(['init', staging]);
+    await git(['fetch', '--depth', '1', REPO, COMMIT], staging);
+    await git(['checkout', '--detach', 'FETCH_HEAD'], staging);
+  },
+});
+console.log(dir);
 ```
 
 When the folder is missing, `git rev-parse` fails and `verify` answers `false`, which triggers the build.
+
+### Callbacks and old Node
+
+Every function also takes a Node-style callback as its last argument, and `verify` and `build` may take one instead of returning a Promise. The package runs on Node 0.8 and later, where it is loaded with `require`:
+
+```js
+var stagedCache = require('staged-cache').stagedCache;
+
+stagedCache(dest, { verify: verify, build: build }, function (err, file) {
+  if (err) throw err;
+  console.log(file);
+});
+```
 
 ## API
 
@@ -114,15 +114,13 @@ Returns `dest` (through the callback, or a Promise when no callback is passed).
 Lists the staging files and folders in `dir` that a killed build left behind, as full paths, sorted (through the callback, or a Promise when no callback is passed). It lists only: nothing is removed, and `stagedCache` never calls it. You decide when, and whether, to delete.
 
 ```js
-var staleStaging = require('staged-cache').staleStaging;
-var rm = require('fs-remove-compat');
+import { rm } from 'node:fs/promises';
+import path from 'node:path';
+import { staleStaging } from 'staged-cache';
 
-staleStaging(path.join(__dirname, '.cache'), function (err, leftovers) {
-  if (err) throw err;
-  leftovers.forEach(function (p) {
-    rm.safeRmSync(p, { recursive: true, force: true });
-  });
-});
+for (const leftover of await staleStaging(path.join(import.meta.dirname, '.cache'))) {
+  await rm(leftover, { recursive: true, force: true });
+}
 ```
 
 A name counts as a leftover when it has the staging form, was made on this machine, and its process no longer exists. A missing `dir` gives an empty list.
