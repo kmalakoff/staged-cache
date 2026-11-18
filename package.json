@@ -50,6 +50,7 @@
   "devDependencies": {
     "@types/mocha": "*",
     "@types/node": "*",
+    "cross-spawn-cb": "*",
     "node-version-use": "*",
     "ts-dev-stack": "*",
     "tsds-config": "*"

@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0]
+
+### Added
+
+- `staleStaging(dir, [callback])` lists the staging files and folders that killed builds left in `dir`: names in the staging form, made on this machine, whose process no longer exists. It removes nothing, and `stagedCache` never calls it.
+
+### Changed
+
+- The staging name is now `.<name of dest>-<host>-<pid>-<suffix>`, labelled with the building process and a short tag of its process-id space (the platform and hostname, and on Linux the PID namespace and machine id). The tag does not change across a reboot. Leftovers named by 0.1.2 (`.<name of dest>-<suffix>`) are not listed by `staleStaging`.
+- The staging name is 13 to 17 characters longer than in 0.1.2, so the longest usable `dest` name is shorter by that much (about 228 characters where the limit is 255).
+
 ## [0.1.2]
 
 ### Fixed

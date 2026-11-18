@@ -89,7 +89,7 @@ When the folder is missing, `git rev-parse` fails and `verify` answers `false`, 
 ## API
 
 ```ts
-import { renameInto, stagedCache, verifySha256 } from 'staged-cache';
+import { renameInto, stagedCache, staleStaging, verifySha256 } from 'staged-cache';
 ```
 
 ### `stagedCache(dest, { verify, build }, [callback])`
@@ -97,7 +97,7 @@ import { renameInto, stagedCache, verifySha256 } from 'staged-cache';
 Returns `dest` (through the callback, or a Promise when no callback is passed).
 
 1. If `verify(dest)` is true, return `dest`. Nothing is built.
-2. Otherwise create `dest`'s parent folder, call `build(staging)` with a unique hidden name beside `dest` (`.<name of dest>-<suffix>`), and `verify(staging)`. The name starts with a dot so that code listing the folder, and any walker that skips dot names, never sees a build in progress.
+2. Otherwise create `dest`'s parent folder, call `build(staging)` with a unique hidden name beside `dest` (`.<name of dest>-<host>-<pid>-<suffix>`), and `verify(staging)`. The name starts with a dot so that code listing the folder, and any walker that skips dot names, never sees a build in progress. `<host>` is a short tag of this machine's process-id space and `<pid>` is the building process, so [`staleStaging`](#stalestagingdir-callback) can tell a killed build from a running one.
 3. Rename `staging` to `dest`. If another process won the race and `verify(dest)` is now true, that result is used.
 4. If an invalid file or folder is in the way, remove it and rename again.
 5. Always remove `staging`. A failed or unverifiable build leaves nothing behind, and the error reaches the caller.
@@ -105,9 +105,34 @@ Returns `dest` (through the callback, or a Promise when no callback is passed).
 `staged-cache` removes only the staging file or folder that the same call created. It never sweeps, expires or prunes anything else.
 
 - Code that lists a cache folder (a version list, a prune step) must skip names that start with a dot: those are builds in progress, not entries.
-- A process that is killed outright (`SIGKILL`, power loss) during a build leaves its hidden staging file or folder behind. It is never taken for an entry, and it stays until you delete it.
+- A process that is killed outright (`SIGKILL`, power loss) during a build leaves its hidden staging file or folder behind. It is never taken for an entry, and it stays until you delete it. [`staleStaging`](#stalestagingdir-callback) finds these leftovers.
 
 `verify(path, callback)` and `build(staging, callback)` take Node-style callbacks (`callback(err, valid)` and `callback(err)`), or return a Promise instead. `verify` answers `false` for a result that is missing or wrong, and reports an error only when it could not decide. An `ENOENT` or `ENOTDIR` error counts as `false` only when its `path` is the checked path or inside it; the same code from elsewhere (for example `spawn git ENOENT`) fails the call. A `verify` or `build` that never calls back and never returns a Promise makes the call hang.
+
+### `staleStaging(dir, [callback])`
+
+Lists the staging files and folders in `dir` that a killed build left behind, as full paths, sorted (through the callback, or a Promise when no callback is passed). It lists only: nothing is removed, and `stagedCache` never calls it. You decide when, and whether, to delete.
+
+```js
+var staleStaging = require('staged-cache').staleStaging;
+var rm = require('fs-remove-compat');
+
+staleStaging(path.join(__dirname, '.cache'), function (err, leftovers) {
+  if (err) throw err;
+  leftovers.forEach(function (p) {
+    rm.safeRmSync(p, { recursive: true, force: true });
+  });
+});
+```
+
+A name counts as a leftover when it has the staging form, was made on this machine, and its process no longer exists. A missing `dir` gives an empty list.
+
+- A pid means something only inside one process-id space, so the `<host>` tag is a hash of the platform and hostname, and on Linux also of the PID namespace and the machine id. A name made on another machine or in another container therefore carries another tag and is never listed. The tag does not change across a reboot, so leftovers from before one are still listed.
+- On Linux where the PID namespace cannot be read (a sandbox without `/proc/self/ns`), no pid can be judged, so `staleStaging` lists nothing there.
+- The remaining limit: two systems that share a folder and cannot be told apart by those values must not use `staleStaging` on that folder, because a build running on the other system would look gone. That is two macOS or Windows machines with the same name on a network share, and Linux machines with the same hostname and the same or no `/etc/machine-id` (virtual machines cloned from one image).
+- Some leftovers are never listed and stay until you delete them: those from a previous run of a container (each run is a new PID namespace), and those made before the machine's hostname changed.
+- A pid that another live process has since reused looks alive, so that leftover is not listed until the pid is free.
+- A leftover from 0.1.2 (`.<name>-<suffix>`, with no host or pid) cannot be attributed to a process and is never listed. Delete those by hand.
 
 ### `verifySha256(expected)`
 

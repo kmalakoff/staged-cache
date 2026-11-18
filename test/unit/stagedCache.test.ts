@@ -5,6 +5,7 @@ import { stagedCache, verifySha256 } from 'staged-cache';
 import { CONTENT, FOLDER_FILES, fileSteps, folderSteps, sha } from '../lib/fixtures.cjs';
 import { holdNoShare, settle } from '../lib/handles.ts';
 import createScratch, { leftovers, readFolder } from '../lib/scratch.ts';
+import { captureStaging, labelOf } from '../lib/staging.ts';
 
 const scratch = createScratch('stagedCache');
 
@@ -419,6 +420,42 @@ describe('stagedCache', () => {
           });
         });
         holder.kill();
+      });
+    });
+  });
+});
+
+describe('stagedCache staging name', () => {
+  before(scratch.setup);
+  after(scratch.clean);
+
+  it('is hidden, beside dest, and labelled with this machine and this process', (done) => {
+    const dest = path.join(scratch.dir('label'), 'artifact.bin');
+    captureStaging(dest, (err, staging) => {
+      if (err) return done(err);
+      assert.equal(path.dirname(staging as string), path.dirname(dest));
+      assert.equal(path.basename(staging as string).charAt(0), '.');
+      const label = labelOf(staging as string, dest);
+      assert.ok(/^[0-9a-f]+$/.test(label.tag), `host tag ${label.tag}`);
+      assert.equal(label.pid, String(process.pid));
+      assert.ok(/^\d+$/.test(label.suffix), `suffix ${label.suffix}`);
+      captureStaging(path.join(path.dirname(dest), 'other.bin'), (err, again) => {
+        if (err) return done(err);
+        assert.equal(labelOf(again as string, path.join(path.dirname(dest), 'other.bin')).tag, label.tag);
+        done();
+      });
+    });
+  });
+
+  it('is unique per call', (done) => {
+    const dest = path.join(scratch.dir('unique'), 'artifact.bin');
+    captureStaging(dest, (err, first) => {
+      if (err) return done(err);
+      scratch.reset(dest);
+      captureStaging(dest, (err, second) => {
+        if (err) return done(err);
+        assert.notEqual(first, second);
+        done();
       });
     });
   });

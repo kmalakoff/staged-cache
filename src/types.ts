@@ -1,4 +1,5 @@
 export type Callback = (err?: Error | null) => void;
+export type StaleStagingCallback = (err?: Error | null, paths?: string[]) => void;
 export type StagedCacheCallback = (err?: Error | null, path?: string) => void;
 export type VerifyCallback = (err?: Error | null, valid?: boolean) => void;
 

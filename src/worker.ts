@@ -1,8 +1,8 @@
 import mkdirp from 'mkdirp-classic';
 import path from 'path';
-import tempSuffix from 'temp-suffix';
 import check from './lib/check.ts';
 import moveInto, { remove } from './lib/moveInto.ts';
+import { stagingPath } from './lib/staging.ts';
 import step from './lib/step.ts';
 import type { StagedCacheCallback, StagedCacheSteps } from './types.ts';
 
@@ -17,8 +17,8 @@ export default function worker(dest: string, steps: StagedCacheSteps, callback: 
       if (err && (err as NodeJS.ErrnoException).code !== 'EEXIST') return callback(err);
 
       // same folder, same disk: the final rename never crosses a device
-      // a hidden sibling: code that lists the folder (and skips dot names, as directory walkers do) never sees a build in progress
-      const staging = tempSuffix(path.join(path.dirname(dest), `.${path.basename(dest)}`));
+      // a hidden sibling labelled with its owner: listing code skips it, and staleStaging can tell a killed build from a live one
+      const staging = stagingPath(dest);
       // the build's own error comes first; a staging folder that cannot be removed is reported when the build succeeded
       const finish = (err?: Error | null) => remove(staging, (removeErr) => (err ? callback(err) : removeErr ? callback(removeErr) : callback(null, dest)));
 
