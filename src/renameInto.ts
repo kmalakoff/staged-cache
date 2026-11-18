@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { safeRm } from 'fs-remove-compat';
 import type { Callback } from './types.ts';
 
 // Another process may have won the rename (Windows reports EPERM when the destination is held open): that is success only
@@ -7,9 +8,10 @@ const LOST_RACE_CODES: Record<string, boolean> = { EPERM: true, EEXIST: true, EN
 
 function worker(from: string, to: string, callback: Callback): void {
   const finish = (err: Error | null) =>
-    fs.unlink(from, (unlinkErr) => {
+    // safeRm retries a file Windows still holds for a moment (a scanner, a just-closed handle); a missing file is fine
+    safeRm(from, { force: true }, (removeErr) => {
       if (err) return callback(err);
-      callback(unlinkErr && (unlinkErr as NodeJS.ErrnoException).code !== 'ENOENT' ? unlinkErr : null);
+      callback(removeErr || null);
     });
 
   fs.rename(from, to, (err) => {

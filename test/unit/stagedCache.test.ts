@@ -261,6 +261,37 @@ describe('stagedCache', () => {
     });
   });
 
+  it('a busy winner is looked at again: verify reporting EPERM on the destination mid-replacement is not a failure', (done) => {
+    const dest = path.join(scratch.dir('winner-busy'), 'corpus');
+    const steps = folderSteps({ builds: 0 });
+    const build = steps.build;
+    const verify = steps.verify;
+    let busy = 0;
+    steps.build = (staging, cb) =>
+      build(staging, (err) => {
+        // another process finishes first: a valid folder, with a mark only it carries
+        fs.mkdirSync(dest);
+        Object.keys(FOLDER_FILES).forEach((name) => fs.writeFileSync(path.join(dest, name), FOLDER_FILES[name]));
+        fs.writeFileSync(path.join(dest, 'winner.txt'), 'x');
+        busy = 2; // Windows: its files refuse to open for a moment while a third process is still replacing them
+        cb(err);
+      });
+    steps.verify = (target, cb) => {
+      if (target === dest && busy > 0) {
+        busy--;
+        return cb(fsError('operation not permitted, open', 'EPERM', path.join(dest, 'c.txt')));
+      }
+      verify(target, cb);
+    };
+    stagedCache(dest, steps, (err) => {
+      if (err) return done(err);
+      assert.equal(busy, 0);
+      assert.equal(fs.existsSync(path.join(dest, 'winner.txt')), true);
+      assert.deepEqual(leftovers(dest), []);
+      done();
+    });
+  });
+
   it('keeps a valid file another process put in place while building', (done) => {
     const dest = path.join(scratch.dir('winner-file'), 'artifact.bin');
     const steps = fileSteps({ builds: 0 });

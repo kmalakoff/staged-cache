@@ -7,6 +7,10 @@ const REFUSED_CODES: Record<string, boolean> = { EPERM: true, EEXIST: true, ENOT
 // A failed remove or second rename with these codes is another process replacing the same thing: look again and retry.
 const CONTENDED_CODES: Record<string, boolean> = { EPERM: true, EEXIST: true, ENOTEMPTY: true };
 const ATTEMPTS = 6;
+// A path being replaced by another process can report these on Windows until the replacement settles.
+const BUSY_CODES: Record<string, boolean> = { EPERM: true, EBUSY: true, EACCES: true };
+// a random pause keeps processes doing the same replacement from colliding on every attempt
+const pause = (count: number) => Math.floor(Math.random() * 15 * count);
 
 export type Accept = (path: string, callback: (err: Error | null | undefined, ok?: boolean) => void) => void;
 
@@ -30,20 +34,19 @@ export default function moveInto(from: string, to: string, accept: Accept, callb
 
   function retry(err: Error, count: number) {
     accept(to, (acceptErr, ok) => {
+      // Windows: a file inside a folder another process is replacing can refuse to open (delete-pending) for a moment.
+      // That is the same contention, not a verify failure: look again, a bounded number of times.
+      if (acceptErr && BUSY_CODES[codeOf(acceptErr)] && count < ATTEMPTS) return void setTimeout(() => retry(err, count + 1), pause(count));
       if (acceptErr) return callback(acceptErr);
       if (ok) return callback(null);
       if (count >= ATTEMPTS || (count > 1 && !CONTENDED_CODES[codeOf(err)])) return callback(err);
-      // a random pause keeps processes doing the same replacement from colliding on every attempt
-      setTimeout(
-        () => {
-          remove(to, (removeErr) => {
-            if (removeErr && !CONTENDED_CODES[codeOf(removeErr)]) return callback(removeErr);
-            if (removeErr) return retry(removeErr, count + 1);
-            attempt(count + 1);
-          });
-        },
-        Math.floor(Math.random() * 15 * count)
-      );
+      setTimeout(() => {
+        remove(to, (removeErr) => {
+          if (removeErr && !CONTENDED_CODES[codeOf(removeErr)]) return callback(removeErr);
+          if (removeErr) return retry(removeErr, count + 1);
+          attempt(count + 1);
+        });
+      }, pause(count));
     });
   }
 
