@@ -97,10 +97,15 @@ import { renameInto, stagedCache, verifySha256 } from 'staged-cache';
 Returns `dest` (through the callback, or a Promise when no callback is passed).
 
 1. If `verify(dest)` is true, return `dest`. Nothing is built.
-2. Otherwise create `dest`'s parent folder, call `build(staging)` with a unique name beside `dest`, and `verify(staging)`.
+2. Otherwise create `dest`'s parent folder, call `build(staging)` with a unique hidden name beside `dest` (`.<name of dest>-<suffix>`), and `verify(staging)`. The name starts with a dot so that code listing the folder, and any walker that skips dot names, never sees a build in progress.
 3. Rename `staging` to `dest`. If another process won the race and `verify(dest)` is now true, that result is used.
 4. If an invalid file or folder is in the way, remove it and rename again.
 5. Always remove `staging`. A failed or unverifiable build leaves nothing behind, and the error reaches the caller.
+
+`staged-cache` removes only the staging file or folder that the same call created. It never sweeps, expires or prunes anything else.
+
+- Code that lists a cache folder (a version list, a prune step) must skip names that start with a dot: those are builds in progress, not entries.
+- A process that is killed outright (`SIGKILL`, power loss) during a build leaves its hidden staging file or folder behind. It is never taken for an entry, and it stays until you delete it.
 
 `verify(path, callback)` and `build(staging, callback)` take Node-style callbacks (`callback(err, valid)` and `callback(err)`), or return a Promise instead. `verify` answers `false` for a result that is missing or wrong, and reports an error only when it could not decide. An `ENOENT` or `ENOTDIR` error counts as `false` only when its `path` is the checked path or inside it; the same code from elsewhere (for example `spawn git ENOENT`) fails the call. A `verify` or `build` that never calls back and never returns a Promise makes the call hang.
 

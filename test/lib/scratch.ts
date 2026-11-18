@@ -24,10 +24,10 @@ export default function createScratch(suite: string) {
   };
 }
 
-// Names beside `dest` that begin with its name: staging leftovers.
+// Everything beside `dest` except `dest` itself: staging leftovers, hidden or not.
 export function leftovers(dest: string): string[] {
   const base = path.basename(dest);
-  return fs.readdirSync(path.dirname(dest)).filter((name) => name !== base && name.indexOf(base) === 0);
+  return fs.readdirSync(path.dirname(dest)).filter((name) => name !== base && name.replace(/^\./, '').indexOf(base) === 0);
 }
 
 export function readFolder(dir: string): Record<string, string> {

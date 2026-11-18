@@ -17,7 +17,8 @@ export default function worker(dest: string, steps: StagedCacheSteps, callback: 
       if (err && (err as NodeJS.ErrnoException).code !== 'EEXIST') return callback(err);
 
       // same folder, same disk: the final rename never crosses a device
-      const staging = tempSuffix(dest);
+      // a hidden sibling: code that lists the folder (and skips dot names, as directory walkers do) never sees a build in progress
+      const staging = tempSuffix(path.join(path.dirname(dest), `.${path.basename(dest)}`));
       // the build's own error comes first; a staging folder that cannot be removed is reported when the build succeeded
       const finish = (err?: Error | null) => remove(staging, (removeErr) => (err ? callback(err) : removeErr ? callback(removeErr) : callback(null, dest)));
 

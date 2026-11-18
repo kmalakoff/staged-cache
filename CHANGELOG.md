@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.2]
+
+### Fixed
+
+- The staging file or folder is now hidden: `.<name of dest>-<suffix>` beside `dest`, where it used to be `<name of dest>-<suffix>`. Code that lists a cache folder (a version list, a prune step) could see a build in progress, or one left by a killed process, and take it for an entry.
+
 ## [0.1.1]
 
 ### Fixed

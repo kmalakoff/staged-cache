@@ -292,6 +292,24 @@ describe('stagedCache', () => {
     });
   });
 
+  it('builds under a hidden name beside dest, so a listing never shows a build in progress', (done) => {
+    const dest = path.join(scratch.dir('hidden-staging'), 'corpus');
+    const steps = folderSteps({ builds: 0 });
+    const build = steps.build;
+    let seen = '';
+    steps.build = (staging, cb) => {
+      seen = staging;
+      build(staging, cb);
+    };
+    stagedCache(dest, steps, (err) => {
+      if (err) return done(err);
+      assert.equal(path.dirname(seen), path.dirname(dest));
+      assert.equal(path.basename(seen).indexOf('.corpus-'), 0, path.basename(seen));
+      assert.deepEqual(fs.readdirSync(path.dirname(dest)), ['corpus']);
+      done();
+    });
+  });
+
   it('keeps a valid file another process put in place while building', (done) => {
     const dest = path.join(scratch.dir('winner-file'), 'artifact.bin');
     const steps = fileSteps({ builds: 0 });
